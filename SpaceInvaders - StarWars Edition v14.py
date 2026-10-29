@@ -80,7 +80,11 @@ imperial_destroyer_large_image.set_colorkey((0, 0, 0))
 
 # Load Darth Vader image for game over screen
 darth_vader_image = pygame.image.load("images/Darth_Vader.png").convert()
-darth_vader_image.set_colorkey((0, 0, 0))  # Make white background transparent
+darth_vader_image.set_colorkey((0, 0, 0))  # Make black background transparent
+
+# Load X-Wing welcome image for start screen
+x_wing_welcome_image = pygame.image.load("images/X-Wing-welcome.png")
+x_wing_welcome_image.set_colorkey((0, 0, 0))
 
 # Load background image
 background_image = pygame.image.load("images/Background_DeathStar.png")
@@ -178,6 +182,9 @@ class XWing:
         self.move_down = False
         self.can_move = True  # Flag to enable/disable movement
         
+        # Firing state
+        self.firing = False
+        
         # Game state tracking
         self.score = 0
         
@@ -186,20 +193,36 @@ class XWing:
         self.bullet_image = pygame.Surface((10, 20))
         self.bullet_image.fill((255, 0, 0))
         self.next_bullet_side = 'left'  # Alternate between left and right edges
+        
+        # Firing rate control (in seconds)
+        self.last_fire_time = 0
+        self.initial_fire_interval = 0.3  # Initial: 0.5 seconds between shots
+        self.fire_interval = self.initial_fire_interval
     
     def fire(self):
         """Create a new bullet at X-Wing's left or right edge, alternating sides"""
-        # Determine which edge to fire from
-        if self.next_bullet_side == 'left':
-            x_pos = self.rect.left
-        else:
-            x_pos = self.rect.right
+        # Check if enough time has passed since last shot
+        current_time = time.time()
+        time_since_last_fire = current_time - self.last_fire_time
         
-        bullet = Bullet(x_pos, self.rect.top)
-        self.bullets.append(bullet)
+        # Decrease fire interval over time (fire faster as game progresses)
+        # Same scaling as TieFighters: interval decreases by factor over time
+        game_time = current_time - start_time
+        self.fire_interval = max(0.01, self.initial_fire_interval / (1 + game_time / 60))
         
-        # Toggle for next bullet
-        self.next_bullet_side = 'right' if self.next_bullet_side == 'left' else 'left'
+        if time_since_last_fire >= self.fire_interval:
+            # Determine which edge to fire from
+            if self.next_bullet_side == 'left':
+                x_pos = self.rect.left
+            else:
+                x_pos = self.rect.right
+            
+            bullet = Bullet(x_pos, self.rect.top)
+            self.bullets.append(bullet)
+            
+            # Toggle for next bullet
+            self.next_bullet_side = 'right' if self.next_bullet_side == 'left' else 'left'
+            self.last_fire_time = current_time
 
     def update(self):
         """
@@ -233,6 +256,10 @@ class XWing:
             # Bottom boundary: y + height <= screen_height
             if self.rect.y > screen_height - self.rect.height:
                 self.rect.y = screen_height - self.rect.height
+        
+        # Automatic firing when fire button is held
+        if self.firing:
+            self.fire()
         
         # Update all active bullets
         bullets_to_remove = []
@@ -481,10 +508,15 @@ while running:
             # Draw background
             screen.blit(background_image, (0, 0))
             
-            # Draw game title
+            # Draw game title at top
             font = pygame.font.SysFont("Arial", 40)
             message1 = font.render("Destroy Tie Fighters or Die", True, (0, 0, 255))
-            screen.blit(message1, (screen_width/2 - message1.get_width()/2, screen_height/2 - 200))
+            screen.blit(message1, (screen_width/2 - message1.get_width()/2, 50))
+            
+            # Draw X-Wing welcome image below title
+            welcome_rect = x_wing_welcome_image.get_rect()
+            welcome_rect.center = (screen_width / 2, screen_height / 2.5)
+            screen.blit(x_wing_welcome_image, welcome_rect)
             
             # Draw game instructions
             font = pygame.font.SysFont("Arial", 20)
@@ -536,9 +568,9 @@ while running:
                 elif event.key == pygame.K_DOWN:
                     x_wing.move_down = True
                 elif event.key == pygame.K_LCTRL:
-                    x_wing.fire()
+                    x_wing.firing = True
                 elif event.key == pygame.K_SPACE:
-                    x_wing.fire()
+                    x_wing.firing = True
             
             elif event.type == pygame.KEYUP:
                 # Handle key release events to stop movement
@@ -550,6 +582,10 @@ while running:
                     x_wing.move_up = False
                 elif event.key == pygame.K_DOWN:
                     x_wing.move_down = False
+                elif event.key == pygame.K_LCTRL:
+                    x_wing.firing = False
+                elif event.key == pygame.K_SPACE:
+                    x_wing.firing = False
         
         # =====================================================================
         # GAME LOGIC UPDATES SECTION
