@@ -78,6 +78,10 @@ imperial_destroyer_small_image.set_colorkey((0, 0, 0))
 imperial_destroyer_large_image = pygame.image.load("images/imperial_destroyer_large.PNG").convert()
 imperial_destroyer_large_image.set_colorkey((0, 0, 0))
 
+# Load Darth Vader image for game over screen
+darth_vader_image = pygame.image.load("images/Darth_Vader.png").convert()
+darth_vader_image.set_colorkey((0, 0, 0))  # Make white background transparent
+
 # Load background image
 background_image = pygame.image.load("images/Background_DeathStar.png")
 
@@ -662,10 +666,17 @@ while running:
     
     # Display game over screen
     screen.fill((0, 0, 0))
+    
+    # Display Darth Vader image above text (centered at top of screen)
+    vader_rect = darth_vader_image.get_rect()
+    vader_rect.center = (screen_width / 2, screen_height / 3)
+    screen.blit(darth_vader_image, vader_rect)
+    
+    # Display Game Over text below Darth Vader
     font = pygame.font.SysFont("Arial", 60)
     game_over_text = font.render("Game Over", True, (255, 0, 0))
     game_over_rect = game_over_text.get_rect()
-    game_over_rect.center = (screen_width / 2, screen_height / 2)
+    game_over_rect.center = (screen_width / 2, screen_height / 2 + 100)
     screen.blit(game_over_text, game_over_rect)
     
     # Fade out sounds
@@ -681,19 +692,19 @@ while running:
     with open('high_score.txt', 'w') as file:
         file.write(str(high_score))
     
-    # Display high score on game over screen
+    # Display high score on game over screen (moved down)
     font = pygame.font.SysFont("Arial", 20)
     high_score_text = font.render(f"High Score: {high_score}", True, (255, 255, 0))
     high_score_rect = high_score_text.get_rect()
-    high_score_rect.center = (screen_width / 2, screen_height / 2 + 60)
+    high_score_rect.center = (screen_width / 2, screen_height / 2 + 160)
     screen.blit(high_score_text, high_score_rect)
     pygame.display.update()
     
-    # Display player's score on game over screen
+    # Display player's score on game over screen (moved down)
     font = pygame.font.SysFont("Arial", 20)
     score_text = font.render(f"Your Score: {x_wing.score}", True, (255, 255, 255))
     score_rect = score_text.get_rect()
-    score_rect.center = (screen_width / 2, screen_height / 2 + 90)
+    score_rect.center = (screen_width / 2, screen_height / 2 + 190)
     screen.blit(score_text, score_rect)
     pygame.display.update()
     
