@@ -24,13 +24,13 @@ screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("The Imperials Destroy or Avoid I will")
 
 # Load and configure sound effects
-collision_sound = pygame.mixer.Sound("sounds/ship_explosion.mp3")
+collision_sound = pygame.mixer.Sound("../Sounds/ship_explosion.mp3")
 collision_sound.set_volume(0.5)  # Explosion sound volume at 50%
 
-tie_sound = pygame.mixer.Sound("sounds/Tie_fighter.mp3")
+tie_sound = pygame.mixer.Sound("../Sounds/Tie_fighter.mp3")
 tie_sound.set_volume(0.1)  # Tie fighter sound volume at 10%
 
-game_music = pygame.mixer.Sound("sounds/imperial_march.mp3")
+game_music = pygame.mixer.Sound("../Sounds/imperial_march.mp3")
 game_music.set_volume(0.5)  # Background music volume at 50%
 
 # Set up the game clock for controlling frame rate
@@ -48,7 +48,7 @@ start_time = time.time()
 # Initialize high score from file or set to 0 if file doesn't exist
 high_score = 0
 try:
-    with open('high_score.txt', 'r') as file:
+    with open('../high_score.txt', 'r') as file:
         high_score = int(file.read())
 except FileNotFoundError:
     # If high score file doesn't exist, start with 0
@@ -61,15 +61,15 @@ except FileNotFoundError:
 # =============================================================================
 
 # Load player and enemy sprites
-x_wing_image = pygame.image.load("images/x_wing.png")
-tie_fighter_image = pygame.image.load("images/tie_fighter.png")
-imperial_destroyer_image = pygame.image.load("images/imperial_destroyer.png")
+x_wing_image = pygame.image.load("../images/x_wing.png")
+tie_fighter_image = pygame.image.load("../images/tie_fighter.png")
+imperial_destroyer_image = pygame.image.load("../images/imperial_destroyer.PNG")
 
 # Load background image
-background_image = pygame.image.load("images/Background_DeathStar.png")
+background_image = pygame.image.load("../images/Background_DeathStar.png")
 
 # Load explosion sprite sheet (12 frames, each 96x96 pixels)
-explosion_sheet = pygame.image.load("images/Explosion.png")
+explosion_sheet = pygame.image.load("../images/Explosion.png")
 
 
 # =============================================================================
@@ -624,7 +624,7 @@ while running:
         high_score = x_wing.score
     
     # Save high score to file
-    with open('high_score.txt', 'w') as file:
+    with open('../high_score.txt', 'w') as file:
         file.write(str(high_score))
     
     # Display high score on game over screen
