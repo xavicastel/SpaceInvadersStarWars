@@ -10,17 +10,17 @@ screen_width = 800
 screen_height = 600
 screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("The Imperials Destroy or Avoid I will")
-collision_sound = pygame.mixer.Sound("sounds/ship_explosion.mp3")
+collision_sound = pygame.mixer.Sound("../Sounds/ship_explosion.mp3")
 collision_sound.set_volume(0.5)
-tie_sound = pygame.mixer.Sound("sounds/Tie_fighter.mp3")
+tie_sound = pygame.mixer.Sound("../Sounds/Tie_fighter.mp3")
 tie_sound.set_volume(0.1)
-game_music = pygame.mixer.Sound("sounds/imperial_march.mp3")
+game_music = pygame.mixer.Sound("../Sounds/imperial_march.mp3")
 game_music.set_volume(0.5)
 
 # setup high score stuff
 high_score = 0
 try:
-    with open('high_score.txt', 'r') as file:
+    with open('../high_score.txt', 'r') as file:
         high_score = int(file.read())
 except FileNotFoundError:
     pass
@@ -32,10 +32,10 @@ clock = pygame.time.Clock()
 start_time = time.time()
 
 # Load the images
-x_wing_image = pygame.image.load("images/x_wing.png")
-tie_fighter_image = pygame.image.load("images/tie_fighter.png")
-imperial_destroyer_image = pygame.image.load("images/imperial_destroyer.png")
-background_image = pygame.image.load("images/Background_DeathStar.png")
+x_wing_image = pygame.image.load("../images/x_wing.png")
+tie_fighter_image = pygame.image.load("../images/tie_fighter.png")
+imperial_destroyer_image = pygame.image.load("../images/imperial_destroyer.PNG")
+background_image = pygame.image.load("../images/Background_DeathStar.png")
 
 # Define the game objects
 class XWing:
@@ -308,7 +308,7 @@ if game_over:
     
     if x_wing.score > high_score:
         high_score = x_wing.score
-    with open('high_score.txt', 'w') as file:
+    with open('../high_score.txt', 'w') as file:
         file.write(str(high_score))
     
     # high score info
