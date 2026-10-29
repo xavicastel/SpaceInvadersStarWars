@@ -208,7 +208,7 @@ class XWing:
         # Decrease fire interval over time (fire faster as game progresses)
         # Same scaling as TieFighters: interval decreases by factor over time
         game_time = current_time - start_time
-        self.fire_interval = max(0.01, self.initial_fire_interval / (1 + game_time / 60))
+        self.fire_interval = max(0.01, self.initial_fire_interval / (1 + game_time / 30))
         
         if time_since_last_fire >= self.fire_interval:
             # Determine which edge to fire from
@@ -386,7 +386,7 @@ class TieFighter:
             # Spawn a new Tie Fighter
             tie_fighters.append(TieFighter())
             # Decrease spawn rate (spawn more frequently) over time
-            self.spawn_rate = self.initial_spawn_rate / (1 + (current_time - start_time) / 60)
+            self.spawn_rate = self.initial_spawn_rate / (0.5 + (current_time - start_time) / 60)
 
         # Update position based on speed
         self.rect.y += self.speed
