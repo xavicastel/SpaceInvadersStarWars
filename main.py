@@ -11,6 +11,7 @@ import asyncio
 import pygame
 import random
 import time
+import sys
 
 
 # =============================================================================
@@ -53,15 +54,36 @@ start_time = time.time()
 # Loads previous high score from file and provides functions to update it
 # =============================================================================
 
-# Initialize high score from file or set to 0 if file doesn't exist
-high_score = 0
-try:
-    with open('high_score.txt', 'r') as file:
-        high_score = int(file.read())
-except FileNotFoundError:
-    # If high score file doesn't exist, start with 0
-    pass
+IS_WEB = sys.platform == "emscripten"
 
+def load_high_score():
+    """Read the high score from localStorage (web) or high_score.txt (desktop)."""
+    try:
+        if IS_WEB:
+            import platform
+            value = platform.window.localStorage.getItem("high_score")
+            return int(value) if value else 0
+        else:
+            with open("high_score.txt", "r") as f:
+                return int(f.read())
+    except Exception:
+        # Missing file, empty value, corrupted content, storage blocked...
+        return 0
+
+def save_high_score(score):
+    """Write the high score to localStorage (web) or high_score.txt (desktop)."""
+    try:
+        if IS_WEB:
+            import platform
+            platform.window.localStorage.setItem("high_score", str(score))
+        else:
+            with open("high_score.txt", "w") as f:
+                f.write(str(score))
+    except Exception:
+        pass  # Never let a saving problem crash the game
+
+# Initialize high score from file or set to 0 if file doesn't exist
+high_score = load_high_score()
 
 # =============================================================================
 # ASSET LOADING SECTION
@@ -755,8 +777,7 @@ async def main():
             high_score = x_wing.score
 
         # Save high score to file
-        with open('high_score.txt', 'w') as file:
-            file.write(str(high_score))
+        save_high_score(high_score)
 
         # Display high score on game over screen (moved down)
         font = pygame.font.Font("fonts/freesansbold.ttf", 20)
