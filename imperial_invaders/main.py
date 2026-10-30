@@ -39,8 +39,8 @@ tie_fighter_explosion_sound.set_volume(0.5 * 0.6)  # 60% of 0.5 = 0.3
 tie_sound = pygame.mixer.Sound("Sounds/tie_fighter.ogg")
 tie_sound.set_volume(0.1)  # Tie fighter sound volume at 10%
 
-game_music = pygame.mixer.Sound("Sounds/imperial_march.ogg")
-game_music.set_volume(0.5)  # Background music volume at 50%
+pygame.mixer.music.load("Sounds/imperial_march.ogg")
+pygame.mixer.music.set_volume(0.5)  # Background music volume at 50%
 
 # Set up the game clock for controlling frame rate
 clock = pygame.time.Clock()
@@ -526,7 +526,7 @@ async def main():
 
         # Game state flags
         game_over = False
-        game_music.play(loops=-1,)  # Start background music looping
+        pygame.mixer.music.play(loops=-1)  # Start background music looping
         initial = True  # Flag for initial start screen
 
         # ---------------------------------------------------------------------
@@ -768,7 +768,7 @@ async def main():
         screen.blit(game_over_text, game_over_rect)
 
         # Fade out sounds
-        game_music.fadeout(3000)
+        pygame.mixer.music.stop()
         tie_sound.fadeout(1000)
         pygame.display.update()
 
