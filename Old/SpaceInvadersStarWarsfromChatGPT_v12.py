@@ -61,15 +61,15 @@ except FileNotFoundError:
 # =============================================================================
 
 # Load player and enemy sprites
-x_wing_image = pygame.image.load("../images/x_wing.png")
-tie_fighter_image = pygame.image.load("../images/tie_fighter.png")
-imperial_destroyer_image = pygame.image.load("../images/imperial_destroyer.png")
+x_wing_image = pygame.image.load("../imperial_invaders/images/x_wing.png")
+tie_fighter_image = pygame.image.load("../imperial_invaders/images/tie_fighter.png")
+imperial_destroyer_image = pygame.image.load("../imperial_invaders/images/imperial_destroyer.png")
 
 # Load background image
-background_image = pygame.image.load("../images/background_deathstar.png")
+background_image = pygame.image.load("../imperial_invaders/images/background_deathstar.png")
 
 # Load explosion sprite sheet (12 frames, each 96x96 pixels)
-explosion_sheet = pygame.image.load("../images/explosion.png")
+explosion_sheet = pygame.image.load("../imperial_invaders/images/explosion.png")
 
 
 # =============================================================================

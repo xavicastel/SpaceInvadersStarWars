@@ -29,17 +29,17 @@ screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("The Imperials Destroy or Avoid I will")
 
 # Load and configure sound effects
-collision_sound = pygame.mixer.Sound("sounds/ship_explosion.ogg")
+collision_sound = pygame.mixer.Sound("Sounds/ship_explosion.ogg")
 collision_sound.set_volume(0.5)  # Explosion sound volume at 50%
 
 # Create a lower volume explosion sound for Tie Fighters (60% of X-Wing volume)
-tie_fighter_explosion_sound = pygame.mixer.Sound("sounds/ship_explosion.ogg")
+tie_fighter_explosion_sound = pygame.mixer.Sound("Sounds/ship_explosion.ogg")
 tie_fighter_explosion_sound.set_volume(0.5 * 0.6)  # 60% of 0.5 = 0.3
 
 tie_sound = pygame.mixer.Sound("Sounds/tie_fighter.ogg")
 tie_sound.set_volume(0.1)  # Tie fighter sound volume at 10%
 
-game_music = pygame.mixer.Sound("sounds/imperial_march.ogg")
+game_music = pygame.mixer.Sound("Sounds/imperial_march.ogg")
 game_music.set_volume(0.5)  # Background music volume at 50%
 
 # Set up the game clock for controlling frame rate

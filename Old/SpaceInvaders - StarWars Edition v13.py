@@ -65,28 +65,28 @@ except FileNotFoundError:
 # =============================================================================
 
 # Load player and enemy sprites
-x_wing_image = pygame.image.load("../images/x_wing.png").convert()
+x_wing_image = pygame.image.load("../imperial_invaders/images/x_wing.png").convert()
 x_wing_image.set_colorkey((0, 0, 0))  # Make black background transparent
-tie_fighter_image = pygame.image.load("../images/tie_fighter.png").convert()
+tie_fighter_image = pygame.image.load("../imperial_invaders/images/tie_fighter.png").convert()
 tie_fighter_image.set_colorkey((5, 5, 5))  # Make dark grey background transparent
 
 # Load Imperial Destroyer variants
-imperial_destroyer_image = pygame.image.load("../images/imperial_destroyer.png").convert()
+imperial_destroyer_image = pygame.image.load("../imperial_invaders/images/imperial_destroyer.png").convert()
 imperial_destroyer_image.set_colorkey((0, 0, 0))
-imperial_destroyer_small_image = pygame.image.load("../images/imperial_destroyer_small.png").convert()
+imperial_destroyer_small_image = pygame.image.load("../imperial_invaders/images/imperial_destroyer_small.png").convert()
 imperial_destroyer_small_image.set_colorkey((0, 0, 0))
-imperial_destroyer_large_image = pygame.image.load("../images/imperial_destroyer_large.png").convert()
+imperial_destroyer_large_image = pygame.image.load("../imperial_invaders/images/imperial_destroyer_large.png").convert()
 imperial_destroyer_large_image.set_colorkey((0, 0, 0))
 
 # Load Darth Vader image for game over screen
-darth_vader_image = pygame.image.load("../images/darth_vader.png").convert()
+darth_vader_image = pygame.image.load("../imperial_invaders/images/darth_vader.png").convert()
 darth_vader_image.set_colorkey((0, 0, 0))  # Make white background transparent
 
 # Load background image
-background_image = pygame.image.load("../images/background_deathstar.png")
+background_image = pygame.image.load("../imperial_invaders/images/background_deathstar.png")
 
 # Load explosion sprite sheet (12 frames, each 96x96 pixels)
-explosion_sheet = pygame.image.load("../images/explosion.png")
+explosion_sheet = pygame.image.load("../imperial_invaders/images/explosion.png")
 
 
 # =============================================================================
