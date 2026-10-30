@@ -10,11 +10,11 @@ screen_width = 800
 screen_height = 600
 screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("The Imperials Destroy or Avoid I will")
-collision_sound = pygame.mixer.Sound("../Sounds/ship_explosion.mp3")
+collision_sound = pygame.mixer.Sound("ship_explosion.mp3")
 collision_sound.set_volume(0.5)
-tie_sound = pygame.mixer.Sound("../Sounds/Tie_fighter.mp3")
+tie_sound = pygame.mixer.Sound("Tie_fighter.mp3")
 tie_sound.set_volume(0.1)
-game_music = pygame.mixer.Sound("../Sounds/imperial_march.mp3")
+game_music = pygame.mixer.Sound("imperial_march.mp3")
 game_music.set_volume(0.5)
 
 # setup high score stuff
