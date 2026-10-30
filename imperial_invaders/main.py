@@ -118,6 +118,15 @@ background_image = pygame.image.load("images/background_deathstar.png")
 # Load explosion sprite sheet (12 frames, each 96x96 pixels)
 explosion_sheet = pygame.image.load("images/explosion.png")
 
+# =============================================================================
+# FONT DECLARATIONS
+# Reusable font objects to avoid recreating them in the game loop
+# =============================================================================
+
+font_20 = pygame.font.Font("fonts/freesansbold.ttf", 20)
+font_25 = pygame.font.Font("fonts/freesansbold.ttf", 25)
+font_40 = pygame.font.Font("fonts/freesansbold.ttf", 40)
+font_60 = pygame.font.Font("fonts/freesansbold.ttf", 60)
 
 # =============================================================================
 # EXPLOSION ANIMATION CLASS
@@ -546,7 +555,7 @@ async def main():
                 screen.blit(background_image, (0, 0))
 
                 # Draw game title at top
-                font = pygame.font.Font("fonts/freesansbold.ttf", 40)
+                font = font_40
                 message1 = font.render("Destroy Tie Fighters or Die", True, (0, 0, 255))
                 screen.blit(message1, (screen_width/2 - message1.get_width()/2, 50))
 
@@ -556,7 +565,7 @@ async def main():
                 screen.blit(x_wing_welcome_image, welcome_rect)
 
                 # Draw game instructions
-                font = pygame.font.Font("fonts/freesansbold.ttf", 20)
+                font = font_20
                 message2 = font.render("Use ´Arrow keys´ to move the X-Wing", True, (255, 255, 255))
                 screen.blit(message2, (screen_width/2 - message2.get_width()/2, screen_height/2 + 100))
 
@@ -726,7 +735,7 @@ async def main():
                 x_wing_explosion.draw(screen)
 
             # Draw current score in the top-left corner
-            font = pygame.font.Font("fonts/freesansbold.ttf", 20)
+            font = font_20
             score_text = font.render("Score: " + str(x_wing.score), True, (255, 255, 255))
             score_rect = score_text.get_rect()
             score_rect.topleft = (10, 10)
@@ -761,7 +770,7 @@ async def main():
         screen.blit(darth_vader_image, vader_rect)
 
         # Display Game Over text below Darth Vader
-        font = pygame.font.Font("fonts/freesansbold.ttf", 60)
+        font = font_60
         game_over_text = font.render("Game Over", True, (255, 0, 0))
         game_over_rect = game_over_text.get_rect()
         game_over_rect.center = (screen_width / 2, screen_height / 2 + 100)
@@ -780,7 +789,7 @@ async def main():
         save_high_score(high_score)
 
         # Display high score on game over screen (moved down)
-        font = pygame.font.Font("fonts/freesansbold.ttf", 20)
+        font = font_20
         high_score_text = font.render(f"High Score: {high_score}", True, (255, 255, 0))
         high_score_rect = high_score_text.get_rect()
         high_score_rect.center = (screen_width / 2, screen_height / 2 + 160)
@@ -788,7 +797,7 @@ async def main():
         pygame.display.update()
 
         # Display player's score on game over screen (moved down)
-        font = pygame.font.Font("fonts/freesansbold.ttf", 20)
+        font = font_20
         score_text = font.render(f"Your Score: {x_wing.score}", True, (255, 255, 255))
         score_rect = score_text.get_rect()
         score_rect.center = (screen_width / 2, screen_height / 2 + 190)
@@ -796,7 +805,7 @@ async def main():
         pygame.display.update()
 
         # Display restart/exit instructions
-        font = pygame.font.Font("fonts/freesansbold.ttf", 25)
+        font = font_25
         message = font.render("Press any key to restart or Esc to exit", True, (255, 255, 255))
         screen.blit(message, (screen_width/2 - message.get_width()/2, screen_height - 50))
         pygame.display.update()
