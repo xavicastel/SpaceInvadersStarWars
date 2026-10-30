@@ -63,7 +63,7 @@ except FileNotFoundError:
 # Load player and enemy sprites
 x_wing_image = pygame.image.load("../images/x_wing.png")
 tie_fighter_image = pygame.image.load("../images/tie_fighter.png")
-imperial_destroyer_image = pygame.image.load("../images/imperial_destroyer.PNG")
+imperial_destroyer_image = pygame.image.load("../images/imperial_destroyer.png")
 
 # Load background image
 background_image = pygame.image.load("../images/background_deathstar.png")

@@ -71,11 +71,11 @@ tie_fighter_image = pygame.image.load("../images/tie_fighter.png").convert()
 tie_fighter_image.set_colorkey((5, 5, 5))  # Make dark grey background transparent
 
 # Load Imperial Destroyer variants
-imperial_destroyer_image = pygame.image.load("../images/imperial_destroyer.PNG").convert()
+imperial_destroyer_image = pygame.image.load("../images/imperial_destroyer.png").convert()
 imperial_destroyer_image.set_colorkey((0, 0, 0))
-imperial_destroyer_small_image = pygame.image.load("../images/imperial_destroyer_small.PNG").convert()
+imperial_destroyer_small_image = pygame.image.load("../images/imperial_destroyer_small.png").convert()
 imperial_destroyer_small_image.set_colorkey((0, 0, 0))
-imperial_destroyer_large_image = pygame.image.load("../images/imperial_destroyer_large.PNG").convert()
+imperial_destroyer_large_image = pygame.image.load("../images/imperial_destroyer_large.png").convert()
 imperial_destroyer_large_image.set_colorkey((0, 0, 0))
 
 # Load Darth Vader image for game over screen
