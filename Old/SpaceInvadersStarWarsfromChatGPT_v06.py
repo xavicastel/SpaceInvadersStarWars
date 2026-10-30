@@ -35,7 +35,7 @@ start_time = time.time()
 x_wing_image = pygame.image.load("../images/x_wing.png")
 tie_fighter_image = pygame.image.load("../images/tie_fighter.png")
 imperial_destroyer_image = pygame.image.load("../images/imperial_destroyer.PNG")
-background_image = pygame.image.load("../images/Background_DeathStar.png")
+background_image = pygame.image.load("../images/background_deathstar.png")
 
 # Define the game objects
 class XWing:

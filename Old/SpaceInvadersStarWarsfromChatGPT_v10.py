@@ -66,10 +66,10 @@ tie_fighter_image = pygame.image.load("../images/tie_fighter.png")
 imperial_destroyer_image = pygame.image.load("../images/imperial_destroyer.PNG")
 
 # Load background image
-background_image = pygame.image.load("../images/Background_DeathStar.png")
+background_image = pygame.image.load("../images/background_deathstar.png")
 
 # Load explosion sprite sheet (12 frames, each 96x96 pixels)
-explosion_sheet = pygame.image.load("../images/Explosion.png")
+explosion_sheet = pygame.image.load("../images/explosion.png")
 
 
 # =============================================================================

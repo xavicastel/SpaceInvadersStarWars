@@ -79,14 +79,14 @@ imperial_destroyer_large_image = pygame.image.load("../images/imperial_destroyer
 imperial_destroyer_large_image.set_colorkey((0, 0, 0))
 
 # Load Darth Vader image for game over screen
-darth_vader_image = pygame.image.load("../images/Darth_Vader.png").convert()
+darth_vader_image = pygame.image.load("../images/darth_vader.png").convert()
 darth_vader_image.set_colorkey((0, 0, 0))  # Make white background transparent
 
 # Load background image
-background_image = pygame.image.load("../images/Background_DeathStar.png")
+background_image = pygame.image.load("../images/background_deathstar.png")
 
 # Load explosion sprite sheet (12 frames, each 96x96 pixels)
-explosion_sheet = pygame.image.load("../images/Explosion.png")
+explosion_sheet = pygame.image.load("../images/explosion.png")
 
 
 # =============================================================================
