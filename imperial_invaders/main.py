@@ -3,8 +3,23 @@
 # A PyGame-based arcade game where the player controls an X-Wing fighter
 # to destroy Tie Fighters and avoid Imperial Destroyers
 #
-# ASYNC VERSION: the main loop is wrapped in "async def main()" so the game
-# can later run in a browser (Pygbag). It still runs normally in PyCharm.
+# ASYNC + TOUCH VERSION
+#   - Runs in PyCharm (desktop), desktop browser and mobile browser (Pygbag)
+#   - Keyboard: Arrow keys to move, Space / Left Ctrl to fire, Esc to end
+#   - Touch / mouse drag: drag anywhere to move the X-Wing (relative to where
+#     you touched, so your finger never covers the ship), the X-Wing fires
+#     automatically while a finger is down. Tap to start / restart.
+#
+# MOBILE AUDIO / PERFORMANCE FIXES IN THIS VERSION
+#   1. Larger audio buffer on the web (pre_init) -> avoids crackling underruns
+#   2. Waiting loops (start screen, game over) now call clock.tick() so they
+#      no longer spin at 100% CPU and starve the audio thread
+#   3. Explosion frames are cut from the sprite sheet ONCE at start-up
+#      instead of on every explosion (was a big per-explosion CPU spike)
+#   4. Tie Fighter sound is rate-limited (it was triggered twice per enemy
+#      and could stack many overlapping voices)
+#   5. Images are converted to the display format (faster blitting)
+#   6. Limited number of mixer channels
 # =============================================================================
 
 import asyncio
@@ -15,17 +30,34 @@ import sys
 
 
 # =============================================================================
+# PLATFORM DETECTION
+# =============================================================================
+
+IS_WEB = sys.platform == "emscripten"
+
+
+# =============================================================================
 # INITIALIZATION SECTION
 # Sets up Pygame, screen dimensions, and audio resources
 # =============================================================================
 
+# The mixer must be configured BEFORE pygame.init().
+# Mobile browsers have a slow audio path: a small buffer underruns and causes
+# crackling / distortion, so use a big buffer on the web.
+#   args: frequency, size (16-bit signed), channels (stereo), buffer
+pygame.mixer.pre_init(44100, -16, 2, 4096 if IS_WEB else 1024)
+
 # Initialize Pygame library
 pygame.init()
+
+# Fewer simultaneous voices = less mixing work for phones
+pygame.mixer.set_num_channels(8)
 
 # Screen dimensions configuration
 screen_width = 800
 screen_height = 600
 screen = pygame.display.set_mode((screen_width, screen_height))
+screen_rect = screen.get_rect()
 pygame.display.set_caption("The Imperials Destroy or Avoid I will")
 
 # Load and configure sound effects
@@ -48,13 +80,24 @@ clock = pygame.time.Clock()
 # Initialize start time for game progression tracking
 start_time = time.time()
 
+# Rate limiter for the Tie Fighter flyby sound (seconds between plays)
+TIE_SOUND_MIN_INTERVAL = 0.25
+_last_tie_sound_time = 0.0
+
+
+def play_tie_sound():
+    """Play the Tie Fighter sound, but never more often than the interval."""
+    global _last_tie_sound_time
+    now = time.time()
+    if now - _last_tie_sound_time >= TIE_SOUND_MIN_INTERVAL:
+        tie_sound.play()
+        _last_tie_sound_time = now
+
 
 # =============================================================================
 # HIGH SCORE MANAGEMENT
 # Loads previous high score from file and provides functions to update it
 # =============================================================================
-
-IS_WEB = sys.platform == "emscripten"
 
 def load_high_score():
     """Read the high score from localStorage (web) or high_score.txt (desktop)."""
@@ -109,14 +152,29 @@ darth_vader_image = pygame.image.load("images/darth_vader.png").convert()
 darth_vader_image.set_colorkey((0, 0, 0))  # Make black background transparent
 
 # Load X-Wing welcome image for start screen
-x_wing_welcome_image = pygame.image.load("images/x-wing-welcome.png")
+x_wing_welcome_image = pygame.image.load("images/x-wing-welcome.png").convert()
 x_wing_welcome_image.set_colorkey((0, 0, 0))
 
-# Load background image
-background_image = pygame.image.load("images/background_deathstar.png")
+# Load background image (convert() = faster blit every frame)
+background_image = pygame.image.load("images/background_deathstar.png").convert()
 
 # Load explosion sprite sheet (12 frames, each 96x96 pixels)
-explosion_sheet = pygame.image.load("images/explosion.png")
+explosion_sheet = pygame.image.load("images/explosion.png").convert()
+
+# =============================================================================
+# EXPLOSION FRAMES (CUT ONCE)
+# Previously every Explosion object re-cut and copied 12 frames. On a phone
+# that caused a visible hiccup (and audio glitches) each time something blew up.
+# =============================================================================
+
+EXPLOSION_FRAME_SIZE = 96
+EXPLOSION_TOTAL_FRAMES = 12
+EXPLOSION_FRAMES = []
+for _i in range(EXPLOSION_TOTAL_FRAMES):
+    _rect = pygame.Rect(_i * EXPLOSION_FRAME_SIZE, 0, EXPLOSION_FRAME_SIZE, EXPLOSION_FRAME_SIZE)
+    _frame = explosion_sheet.subsurface(_rect).copy()
+    _frame.set_colorkey((0, 0, 0))  # Make black background transparent
+    EXPLOSION_FRAMES.append(_frame)
 
 # =============================================================================
 # FONT DECLARATIONS
@@ -128,6 +186,113 @@ font_25 = pygame.font.Font("fonts/freesansbold.ttf", 25)
 font_40 = pygame.font.Font("fonts/freesansbold.ttf", 40)
 font_60 = pygame.font.Font("fonts/freesansbold.ttf", 60)
 
+
+# =============================================================================
+# POINTER INPUT (TOUCH + MOUSE)
+# One small class that turns touch-screen and mouse events into three simple
+# actions: 'down', 'move' (with dx, dy) and 'up'.
+#
+# Designed to be tolerant of how different browsers report touches:
+#   - Finger ids are NOT used. Any finger-up (or mouse-up) releases the
+#     pointer, so a lost/mismatched id can never leave the ship "stuck".
+#   - A new finger-down always re-syncs the state (self-healing).
+#   - Browsers often send emulated MOUSE events for the same touch. Mouse
+#     MOVEMENT is ignored for a moment after a finger event so the ship does
+#     not move twice, but mouse UP always releases (extra safety net).
+#   - Single-touch play: the last finger to touch is the one that steers.
+# =============================================================================
+
+TOUCH_SENSITIVITY = 1.2      # >1 = ship moves slightly more than the finger
+FINGER_PRIORITY_SECONDS = 0.5  # ignore emulated mouse motion this long after a finger event
+DEBUG_TOUCH = False          # True = show touch state on screen (for troubleshooting)
+
+
+class PointerInput:
+    def __init__(self):
+        self.down = False             # Is a finger / mouse button currently down?
+        self.finger_last = None       # last finger position (pixels)
+        self.mouse_last = None        # last mouse position (pixels)
+        self.last_finger_time = -10.0  # time of the last finger event
+        self.last_event_name = "-"    # for DEBUG_TOUCH
+
+    def reset(self):
+        """Forget any held finger (call when a new game starts)."""
+        self.down = False
+        self.finger_last = None
+        self.mouse_last = None
+
+    def _finger_recent(self):
+        return time.time() - self.last_finger_time < FINGER_PRIORITY_SECONDS
+
+    def handle(self, event):
+        """
+        Feed one pygame event. Returns None, or a tuple (kind, dx, dy)
+        where kind is 'down', 'move' or 'up'.
+        """
+        t = event.type
+
+        # ---------------- Touch screen ----------------
+        if t == pygame.FINGERDOWN:
+            self.last_finger_time = time.time()
+            self.last_event_name = "FINGERDOWN"
+            self.down = True
+            self.finger_last = (event.x * screen_width, event.y * screen_height)
+            return ('down', 0, 0)
+
+        if t == pygame.FINGERMOTION:
+            self.last_finger_time = time.time()
+            self.last_event_name = "FINGERMOTION"
+            pos = (event.x * screen_width, event.y * screen_height)
+            if not self.down or self.finger_last is None:
+                self.finger_last = pos
+                return None
+            dx, dy = pos[0] - self.finger_last[0], pos[1] - self.finger_last[1]
+            self.finger_last = pos
+            return ('move', dx, dy)
+
+        if t == pygame.FINGERUP:
+            self.last_finger_time = time.time()
+            self.last_event_name = "FINGERUP"
+            was_down = self.down
+            self.down = False
+            self.finger_last = None
+            return ('up', 0, 0) if was_down else None
+
+        # ---------------- Mouse (desktop, or emulated touch) ----------------
+        if t == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            self.last_event_name = "MOUSEDOWN"
+            self.mouse_last = event.pos
+            if self.down:
+                return None  # already down (finger event came first)
+            self.down = True
+            return ('down', 0, 0)
+
+        if t == pygame.MOUSEMOTION:
+            if not self.down or self._finger_recent():
+                self.mouse_last = event.pos
+                return None
+            if self.mouse_last is None:
+                self.mouse_last = event.pos
+                return None
+            self.last_event_name = "MOUSEMOTION"
+            dx, dy = event.pos[0] - self.mouse_last[0], event.pos[1] - self.mouse_last[1]
+            self.mouse_last = event.pos
+            return ('move', dx, dy)
+
+        if t == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.last_event_name = "MOUSEUP"
+            self.mouse_last = None
+            was_down = self.down
+            self.down = False
+            self.finger_last = None
+            return ('up', 0, 0) if was_down else None
+
+        return None
+
+
+pointer = PointerInput()
+
+
 # =============================================================================
 # EXPLOSION ANIMATION CLASS
 # Handles the explosion animation with 12 frames
@@ -135,30 +300,14 @@ font_60 = pygame.font.Font("fonts/freesansbold.ttf", 60)
 
 class Explosion:
     """
-    Animation for X-Wing explosion with 12 frames
+    Animation for explosions with 12 frames
     Plays simultaneously with explosion sound
     """
 
     def __init__(self, x, y):
-        """Initialize explosion at given position with 12 frames from sprite sheet"""
-        # Each frame is 96x96 pixels (1152 total width / 12 frames = 96 per frame)
-        self.frame_width = 96
-        self.frame_height = 96
-        self.total_frames = 12
-
-        # Extract all frames from the sprite sheet
-        self.frames = []
-        for i in range(self.total_frames):
-            frame_rect = pygame.Rect(
-                i * self.frame_width,
-                0,
-                self.frame_width,
-                self.frame_height
-            )
-            frame = explosion_sheet.subsurface(frame_rect).copy()
-            # Make black background transparent
-            frame.set_colorkey((0, 0, 0))
-            self.frames.append(frame)
+        """Initialize explosion at given position (frames are shared, pre-cut)"""
+        self.frames = EXPLOSION_FRAMES
+        self.total_frames = EXPLOSION_TOTAL_FRAMES
 
         # Animation state
         self.current_frame = 0
@@ -168,7 +317,7 @@ class Explosion:
         self.y = y
         self.completed = False
 
-        # Position the explosion at the center of the X-Wing
+        # Position the explosion at the given center
         self.rect = self.frames[0].get_rect()
         self.rect.centerx = x
         self.rect.centery = y
@@ -218,7 +367,8 @@ class XWing:
         self.can_move = True  # Flag to enable/disable movement
 
         # Firing state
-        self.firing = False
+        self.firing = False        # keyboard fire button held
+        self.touch_firing = False  # finger down (auto-fire on touch)
 
         # Game state tracking
         self.score = 0
@@ -231,8 +381,16 @@ class XWing:
 
         # Firing rate control (in seconds)
         self.last_fire_time = 0
-        self.initial_fire_interval = 0.3  # Initial: 0.5 seconds between shots
+        self.initial_fire_interval = 0.3
         self.fire_interval = self.initial_fire_interval
+
+    def drag(self, dx, dy):
+        """Move the X-Wing by a finger/mouse drag (relative movement)"""
+        if not self.can_move:
+            return
+        self.rect.x += int(dx * TOUCH_SENSITIVITY)
+        self.rect.y += int(dy * TOUCH_SENSITIVITY)
+        self.rect.clamp_ip(screen_rect)
 
     def fire(self):
         """Create a new bullet at X-Wing's left or right edge, alternating sides"""
@@ -241,7 +399,6 @@ class XWing:
         time_since_last_fire = current_time - self.last_fire_time
 
         # Decrease fire interval over time (fire faster as game progresses)
-        # Same scaling as TieFighters: interval decreases by factor over time
         game_time = current_time - start_time
         self.fire_interval = max(0.01, self.initial_fire_interval / (1 + game_time / 30))
 
@@ -279,21 +436,10 @@ class XWing:
                 self.rect.y += self.speed
 
             # Ensure X-Wing stays within screen boundaries
-            # Left boundary: x >= 0
-            if self.rect.x < 0:
-                self.rect.x = 0
-            # Right boundary: x + width <= screen_width
-            if self.rect.x > screen_width - self.rect.width:
-                self.rect.x = screen_width - self.rect.width
-            # Top boundary: y >= 0
-            if self.rect.y < 0:
-                self.rect.y = 0
-            # Bottom boundary: y + height <= screen_height
-            if self.rect.y > screen_height - self.rect.height:
-                self.rect.y = screen_height - self.rect.height
+            self.rect.clamp_ip(screen_rect)
 
-        # Automatic firing when fire button is held
-        if self.firing:
+        # Automatic firing when keyboard fire button OR a finger is held
+        if self.firing or self.touch_firing:
             self.fire()
 
         # Update all active bullets
@@ -434,16 +580,6 @@ class TieFighter:
         else:
             return 0  # Return 0 points earned
 
-    def play_tie_sound(self):
-        """Play Tie Fighter sound effect when appropriate"""
-        global tie_sound_played
-        tie_sound_played = False
-        if not self.passed and not tie_sound_played:
-            tie_sound.play()
-            tie_sound_played = True
-        elif self.passed:
-            tie_sound_played = False
-
 
 class ImperialDestroyer:
     """
@@ -486,14 +622,16 @@ class ImperialDestroyer:
 # Rules for the web version:
 #   - Every loop that can run for more than a moment must contain
 #     "await asyncio.sleep(0)" so the browser gets control back each frame.
-#   - Never block (no time.sleep, no tight "wait for key" loops without await).
+#   - Waiting loops must ALSO call clock.tick(): without it they spin at full
+#     speed, which on phones starves the audio and causes crackling.
+#   - Never block (no time.sleep).
 # =============================================================================
 
 async def main():
     # These variables are shared with the classes above (TieFighter, XWing...),
     # so they must be module-level globals, not local variables of main().
     global tie_fighters, imperial_destroyers, tie_fighter_explosions
-    global start_time, tie_sound_played, high_score
+    global start_time, high_score
 
     # Main game running flag
     running = True
@@ -506,6 +644,7 @@ async def main():
 
         # Create player X-Wing
         x_wing = XWing()
+        pointer.reset()
 
         # Initialize enemy lists
         tie_fighters = []
@@ -518,20 +657,18 @@ async def main():
         x_wing_explosion = None
         x_wing_explosion_active = False
 
-        # Sound state tracking
-        tie_sound_played = False
-        last_tie_fighter_time = 0  # Track time when last tie fighter was added
-        tie_fighter_interval = 5000  # Add a new tie fighter every 5 seconds
-
         # Create initial Tie Fighters (10 enemies)
         for i in range(10):
-            tie_fighter = TieFighter()
-            tie_fighters.append(tie_fighter)
+            tie_fighters.append(TieFighter())
 
         # Create initial Imperial Destroyers (3 large enemies)
         for i in range(3):
-            imperial_destroyer = ImperialDestroyer()
-            imperial_destroyers.append(imperial_destroyer)
+            imperial_destroyers.append(ImperialDestroyer())
+
+        # Cached HUD text (re-rendered only when the score changes)
+        hud_score_value = None
+        hud_score_surface = None
+        hud_high_surface = font_20.render(f"High Score: {high_score}", True, (255, 255, 0))
 
         # Game state flags
         game_over = False
@@ -550,38 +687,35 @@ async def main():
             # Displays instructions and waits for player to start
             # =================================================================
 
-            if initial == True:
+            if initial:
                 # Draw background
                 screen.blit(background_image, (0, 0))
 
                 # Draw game title at top
-                font = font_40
-                message1 = font.render("Destroy Tie Fighters or Die", True, (0, 0, 255))
-                screen.blit(message1, (screen_width/2 - message1.get_width()/2, 50))
+                message1 = font_40.render("Destroy Tie Fighters or Die", True, (0, 0, 255))
+                screen.blit(message1, (screen_width / 2 - message1.get_width() / 2, 50))
 
                 # Draw X-Wing welcome image below title
                 welcome_rect = x_wing_welcome_image.get_rect()
                 welcome_rect.center = (screen_width / 2, screen_height / 2.5)
                 screen.blit(x_wing_welcome_image, welcome_rect)
 
-                # Draw game instructions
-                font = font_20
-                message2 = font.render("Use ´Arrow keys´ to move the X-Wing", True, (255, 255, 255))
-                screen.blit(message2, (screen_width/2 - message2.get_width()/2, screen_height/2 + 100))
-
-                message3 = font.render("Use ´Left Control´ or 'Space' to fire", True, (255, 255, 255))
-                screen.blit(message3, (screen_width/2 - message3.get_width()/2, screen_height/2 + 150))
-
-                message4 = font.render("Press ´Esc´ to end the game", True, (255, 255, 255))
-                screen.blit(message4, (screen_width/2 - message4.get_width()/2, screen_height/2 + 200))
-
-                message5 = font.render("Press any key to start", True, (255, 255, 255))
-                screen.blit(message5, (screen_width/2 - message5.get_width()/2, screen_height/2 + 250))
+                # Draw game instructions (keyboard AND touch)
+                lines = [
+                    "Keyboard: Arrow keys to move, Space or Left Ctrl to fire",
+                    "Touch: drag to move, X-Wing fires while you touch",
+                    "Press Esc to end the game",
+                    "Tap the screen or press any key to start",
+                ]
+                y = screen_height / 2 + 90
+                for text in lines:
+                    surf = font_20.render(text, True, (255, 255, 255))
+                    screen.blit(surf, (screen_width / 2 - surf.get_width() / 2, y))
+                    y += 35
 
                 pygame.display.update()
 
-                # Wait for any key press to start the game
-                # (async: yields to the browser every pass of the loop)
+                # Wait for a key press or a tap to start the game
                 waiting_for_start = True
                 while waiting_for_start:
                     for event in pygame.event.get():
@@ -591,12 +725,21 @@ async def main():
                         elif event.type == pygame.KEYDOWN:
                             waiting_for_start = False
                             initial = False
-                    await asyncio.sleep(0)  # <-- IMPORTANT for the web
+                        else:
+                            action = pointer.handle(event)
+                            if action and action[0] == 'down':
+                                waiting_for_start = False
+                                initial = False
+                    clock.tick(30)               # <-- keeps CPU/audio healthy on phones
+                    await asyncio.sleep(0)       # <-- IMPORTANT for the web
+
+                # If the finger that started the game is still down, start firing
+                x_wing.touch_firing = pointer.down
                 continue  # Skip the rest of the frame
 
             # =================================================================
             # EVENT HANDLING SECTION
-            # Processes keyboard and window events
+            # Processes keyboard, touch and window events
             # =================================================================
 
             for event in pygame.event.get():
@@ -615,9 +758,7 @@ async def main():
                         x_wing.move_up = True
                     elif event.key == pygame.K_DOWN:
                         x_wing.move_down = True
-                    elif event.key == pygame.K_LCTRL:
-                        x_wing.firing = True
-                    elif event.key == pygame.K_SPACE:
+                    elif event.key == pygame.K_LCTRL or event.key == pygame.K_SPACE:
                         x_wing.firing = True
 
                 elif event.type == pygame.KEYUP:
@@ -630,10 +771,20 @@ async def main():
                         x_wing.move_up = False
                     elif event.key == pygame.K_DOWN:
                         x_wing.move_down = False
-                    elif event.key == pygame.K_LCTRL:
+                    elif event.key == pygame.K_LCTRL or event.key == pygame.K_SPACE:
                         x_wing.firing = False
-                    elif event.key == pygame.K_SPACE:
-                        x_wing.firing = False
+
+                else:
+                    # Touch screen (or mouse drag)
+                    action = pointer.handle(event)
+                    if action:
+                        kind, dx, dy = action
+                        if kind == 'down':
+                            x_wing.touch_firing = True
+                        elif kind == 'move':
+                            x_wing.drag(dx, dy)
+                        elif kind == 'up':
+                            x_wing.touch_firing = False
 
             # =================================================================
             # GAME LOGIC UPDATES SECTION
@@ -665,19 +816,15 @@ async def main():
                     # Handle Tie Fighters that have passed the bottom of the screen
                     if tie_fighter.passed:
                         tie_fighters.remove(tie_fighter)
-                        new_tie_fighter = TieFighter()
-                        tie_fighters.append(new_tie_fighter)
-                        tie_sound.play()
-                        tie_fighter.play_tie_sound()
+                        tie_fighters.append(TieFighter())
+                        play_tie_sound()
 
                     # Check for collision between X-Wing and Tie Fighter
                     if x_wing.rect.colliderect(tie_fighter.rect):
-                        # Create explosion at X-Wing position
                         x_wing_explosion = Explosion(x_wing.rect.centerx, x_wing.rect.centery)
                         x_wing_explosion_active = True
                         x_wing.can_move = False  # Stop X-Wing movement
-                        collision_sound.play()  # Play explosion sound
-                        # Don't set game_over here - wait for explosion to finish
+                        collision_sound.play()
                         break  # Exit loop to prevent multiple explosions
 
                 # Update all Imperial Destroyers
@@ -687,17 +834,14 @@ async def main():
                     # Handle Imperial Destroyers that have passed the bottom of the screen
                     if imperial_destroyer.rect.y > screen_height:
                         imperial_destroyers.remove(imperial_destroyer)
-                        new_imperial_destroyer = ImperialDestroyer()
-                        imperial_destroyers.append(new_imperial_destroyer)
+                        imperial_destroyers.append(ImperialDestroyer())
 
                     # Check for collision between X-Wing and Imperial Destroyer
                     if x_wing.rect.colliderect(imperial_destroyer.rect):
-                        # Create explosion at X-Wing position
                         x_wing_explosion = Explosion(x_wing.rect.centerx, x_wing.rect.centery)
                         x_wing_explosion_active = True
                         x_wing.can_move = False  # Stop X-Wing movement
-                        collision_sound.play()  # Play explosion sound
-                        # Don't set game_over here - wait for explosion to finish
+                        collision_sound.play()
                         break  # Exit loop to prevent multiple explosions
 
                 # Update X-Wing position and bullets
@@ -734,18 +878,20 @@ async def main():
             if x_wing_explosion_active and x_wing_explosion:
                 x_wing_explosion.draw(screen)
 
-            # Draw current score in the top-left corner
-            font = font_20
-            score_text = font.render("Score: " + str(x_wing.score), True, (255, 255, 255))
-            score_rect = score_text.get_rect()
-            score_rect.topleft = (10, 10)
-            screen.blit(score_text, score_rect)
+            # Draw current score in the top-left corner (cached until it changes)
+            if hud_score_value != x_wing.score:
+                hud_score_value = x_wing.score
+                hud_score_surface = font_20.render("Score: " + str(x_wing.score), True, (255, 255, 255))
+            screen.blit(hud_score_surface, (10, 10))
 
             # Draw high score below current score
-            high_score_text = font.render(f"High Score: {high_score}", True, (255, 255, 0))  # Yellow color
-            high_score_rect = high_score_text.get_rect()
-            high_score_rect.topleft = (10, 40)  # Placed slightly below the current score
-            screen.blit(high_score_text, high_score_rect)
+            screen.blit(hud_high_surface, (10, 40))
+
+            if DEBUG_TOUCH:
+                dbg = font_20.render(
+                    f"touch down={pointer.down} last={pointer.last_event_name} firing={x_wing.touch_firing}",
+                    True, (0, 255, 0))
+                screen.blit(dbg, (10, 70))
 
             # Update the display
             pygame.display.update()
@@ -770,8 +916,7 @@ async def main():
         screen.blit(darth_vader_image, vader_rect)
 
         # Display Game Over text below Darth Vader
-        font = font_60
-        game_over_text = font.render("Game Over", True, (255, 0, 0))
+        game_over_text = font_60.render("Game Over", True, (255, 0, 0))
         game_over_rect = game_over_text.get_rect()
         game_over_rect.center = (screen_width / 2, screen_height / 2 + 100)
         screen.blit(game_over_text, game_over_rect)
@@ -779,46 +924,40 @@ async def main():
         # Fade out sounds
         pygame.mixer.music.stop()
         tie_sound.fadeout(1000)
-        pygame.display.update()
 
         # Update high score if current score is higher
         if x_wing.score > high_score:
             high_score = x_wing.score
 
-        # Save high score to file
+        # Save high score
         save_high_score(high_score)
 
-        # Display high score on game over screen (moved down)
-        font = font_20
-        high_score_text = font.render(f"High Score: {high_score}", True, (255, 255, 0))
+        # Display high score on game over screen
+        high_score_text = font_20.render(f"High Score: {high_score}", True, (255, 255, 0))
         high_score_rect = high_score_text.get_rect()
         high_score_rect.center = (screen_width / 2, screen_height / 2 + 160)
         screen.blit(high_score_text, high_score_rect)
-        pygame.display.update()
 
-        # Display player's score on game over screen (moved down)
-        font = font_20
-        score_text = font.render(f"Your Score: {x_wing.score}", True, (255, 255, 255))
+        # Display player's score on game over screen
+        score_text = font_20.render(f"Your Score: {x_wing.score}", True, (255, 255, 255))
         score_rect = score_text.get_rect()
         score_rect.center = (screen_width / 2, screen_height / 2 + 190)
         screen.blit(score_text, score_rect)
+
+        # Display restart/exit instructions (keyboard AND touch)
+        message = font_25.render("Tap or press any key to restart  (Esc to exit)", True, (255, 255, 255))
+        screen.blit(message, (screen_width / 2 - message.get_width() / 2, screen_height - 50))
+
+        # One single display update for the whole game over screen
         pygame.display.update()
 
-        # Display restart/exit instructions
-        font = font_25
-        message = font.render("Press any key to restart or Esc to exit", True, (255, 255, 255))
-        screen.blit(message, (screen_width/2 - message.get_width()/2, screen_height - 50))
-        pygame.display.update()
-
-        # Wait for 1 second before allowing restart (after game over screen is seen)
+        # Wait 1 second before allowing restart (so a frantic last tap
+        # doesn't skip the game over screen)
         wait_start_time = time.time()
         waiting_for_restart = True
-        restart_allowed = False
 
         while waiting_for_restart:
-            # Check if 1 second has passed
-            if time.time() - wait_start_time >= 1.0:
-                restart_allowed = True
+            restart_allowed = (time.time() - wait_start_time) >= 1.0
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -828,16 +967,18 @@ async def main():
                     if restart_allowed:
                         if event.key == pygame.K_ESCAPE:
                             running = False
-                            waiting_for_restart = False
                         else:
                             # Reset game state for a new game
-                            game_over = False
-                            initial = True
                             start_time = time.time()
+                        waiting_for_restart = False
+                else:
+                    action = pointer.handle(event)
+                    if action and action[0] == 'down' and restart_allowed:
+                        start_time = time.time()
+                        waiting_for_restart = False
 
-                            waiting_for_restart = False
-
-            await asyncio.sleep(0)  # <-- IMPORTANT for the web
+            clock.tick(30)               # <-- keeps CPU/audio healthy on phones
+            await asyncio.sleep(0)       # <-- IMPORTANT for the web
 
         # Clean up and exit if player chose to quit
         if not running:

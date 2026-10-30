@@ -1,5 +1,9 @@
-Space Invaders running into Star Wars theme
-Should work in Python 3.11
-Free to play
+Space Invaders game running into Star Wars theme
 
-Explosion from: https://opengameart.org/content/pixel-explosion-12-frames
+compiled with pygbag: pygbag --build imperial_invaders
+
+take the build/web files and deploy on github or cloudflare
+
+runs on web desktop with mouse or keyboard and on mobile web with touch screen
+
+currently running at https://mister-yoda.castello-xavier.workers.dev/
