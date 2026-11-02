@@ -311,7 +311,7 @@ class Explosion:
 
         # Animation state
         self.current_frame = 0
-        self.animation_speed = 2  # Frames per update (controls animation speed)
+        self.animation_speed = 1  # Frames per update (controls animation speed)
         self.frame_counter = 0
         self.x = x
         self.y = y
@@ -359,7 +359,7 @@ class XWing:
         self.rect.y = screen_height - self.rect.height - 10
 
         # Movement configuration
-        self.speed = 5
+        self.speed = 10
         self.move_left = False
         self.move_right = False
         self.move_up = False
@@ -493,7 +493,7 @@ class Bullet(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.centerx = x
         self.rect.bottom = y
-        self.speed = -10  # Negative for upward movement
+        self.speed = -20  # Negative for upward movement
 
     def update(self):
         """
@@ -532,9 +532,9 @@ class TieFighter:
         self.rect.y = random.randint(-500, -50)
 
         # Movement configuration with random variation
-        self.initial_speed = random.randint(1, 4)
+        self.initial_speed = random.randint(2, 8)
         self.speed = self.initial_speed
-        self.initial_x_speed = random.randint(-2, 2)  # Horizontal movement
+        self.initial_x_speed = random.randint(-4, 4)  # Horizontal movement
         self.x_speed = self.initial_x_speed
 
         # Spawning configuration
@@ -561,13 +561,15 @@ class TieFighter:
         current_time = time.time()
         if current_time - self.time >= self.spawn_rate:
             self.time = current_time
-            # Increase speed by 10% every 30 seconds
-            self.speed = self.initial_speed * (1 + (current_time - start_time) / 30)
+            # Calculate time since game start, capped at 30 seconds for max difficulty
+            time_since_start = min(30, current_time - start_time)
+            # Increase speed by 10% every 30 seconds, capped at 2x after 30 seconds
+            self.speed = self.initial_speed * (1 + time_since_start / 30)
             self.x_speed = self.initial_x_speed
             # Spawn a new Tie Fighter
             tie_fighters.append(TieFighter())
-            # Decrease spawn rate (spawn more frequently) over time
-            self.spawn_rate = self.initial_spawn_rate / (0.5 + (current_time - start_time) / 60)
+            # Decrease spawn rate (spawn more frequently) over time, capped at 30 seconds
+            self.spawn_rate = self.initial_spawn_rate / (0.5 + time_since_start / 60)
 
         # Update position based on speed
         self.rect.y += self.speed
@@ -608,7 +610,7 @@ class ImperialDestroyer:
         self.rect.y = random.randint(-1000, -500)
 
         # Movement configuration (slow downward movement)
-        self.speed = 1
+        self.speed = 2
 
     def update(self):
         """Move Imperial Destroyer downward"""
@@ -896,8 +898,8 @@ async def main():
             # Update the display
             pygame.display.update()
 
-            # Control game speed (60 FPS)
-            clock.tick(60)
+            # Control game speed (30 FPS)
+            clock.tick(30)
 
             # Give control back to the browser once per frame
             await asyncio.sleep(0)  # <-- IMPORTANT for the web
