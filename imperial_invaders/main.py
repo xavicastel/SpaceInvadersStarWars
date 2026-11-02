@@ -304,14 +304,14 @@ class Explosion:
     Plays simultaneously with explosion sound
     """
 
-    def __init__(self, x, y):
+    def __init__(self, x, y, animation_speed=1):
         """Initialize explosion at given position (frames are shared, pre-cut)"""
         self.frames = EXPLOSION_FRAMES
         self.total_frames = EXPLOSION_TOTAL_FRAMES
 
         # Animation state
         self.current_frame = 0
-        self.animation_speed = 1  # Frames per update (controls animation speed)
+        self.animation_speed = animation_speed  # Frames per update (controls animation speed)
         self.frame_counter = 0
         self.x = x
         self.y = y
@@ -453,6 +453,7 @@ class XWing:
                 continue  # Skip collision checks for this bullet
 
             # Check for collision with each Tie Fighter
+            tie_fighter_hit = False
             for tie_fighter in tie_fighters[:]:
                 if bullet.rect.colliderect(tie_fighter.rect):
                     self.score += 10  # Add points for hitting a Tie Fighter
@@ -470,7 +471,52 @@ class XWing:
 
                     # Mark bullet for removal
                     bullets_to_remove.append(bullet)
+                    tie_fighter_hit = True
                     break  # Only hit one Tie Fighter per bullet
+            
+            # Only check Imperial Destroyers if bullet didn't hit a Tie Fighter
+            if not tie_fighter_hit:
+                for imperial_destroyer in imperial_destroyers[:]:
+                    if bullet.rect.colliderect(imperial_destroyer.rect):
+                        # Record hit position
+                        hit_x = bullet.rect.centerx
+                        hit_y = bullet.rect.centery
+                        
+                        # Check if this hit destroys the Imperial Destroyer
+                        if imperial_destroyer.get_hit(hit_x, hit_y):
+                            # Get blast radius from the destroyer
+                            blast_radius = 1.5 * imperial_destroyer.destroy()
+                            
+                            # Add score for Imperial Destroyer
+                            self.score += 100
+                            
+                            # Destroy nearby Tie Fighters within blast radius
+                            tie_fighters_to_destroy = []
+                            for tf in tie_fighters[:]:
+                                # Calculate distance between centers
+                                dx = tf.rect.centerx - imperial_destroyer.rect.centerx
+                                dy = tf.rect.centery - imperial_destroyer.rect.centery
+                                distance = (dx**2 + dy**2)**0.5
+                                if distance <= blast_radius:
+                                    tie_fighters_to_destroy.append(tf)
+                            
+                            # Remove destroyed Tie Fighters and add points
+                            for tf in tie_fighters_to_destroy:
+                                tie_fighters.remove(tf)
+                                self.score += 10  # Points for each Tie Fighter
+                                tie_fighter_explosions.append(Explosion(tf.rect.centerx, tf.rect.centery))
+                                tie_fighter_explosion_sound.play()
+                                # Spawn new Tie Fighter to replace
+                                tie_fighters.append(TieFighter())
+                            
+                            # Remove the Imperial Destroyer
+                            imperial_destroyers.remove(imperial_destroyer)
+                            # Spawn a new Imperial Destroyer
+                            imperial_destroyers.append(ImperialDestroyer())
+                        
+                        # Mark bullet for removal
+                        bullets_to_remove.append(bullet)
+                        break  # Only hit one Imperial Destroyer per bullet
 
         # Remove all marked bullets
         for bullet in bullets_to_remove:
@@ -537,10 +583,6 @@ class TieFighter:
         self.initial_x_speed = random.randint(-4, 4)  # Horizontal movement
         self.x_speed = self.initial_x_speed
 
-        # Spawning configuration
-        self.initial_spawn_rate = 5  # Spawn a new Tie Fighter every 5 seconds initially
-        self.spawn_rate = self.initial_spawn_rate
-
         # Timing and state tracking
         self.time = time.time()
         self.passed = False  # Flag for when Tie Fighter passes bottom of screen
@@ -554,22 +596,14 @@ class TieFighter:
 
     def update(self):
         """
-        Update Tie Fighter position and spawn new enemies based on game progression
+        Update Tie Fighter position based on game progression
         Returns 1 point if Tie Fighter passes the bottom of the screen
         """
-        # Increase speed and spawn rate over time (difficulty scaling)
+        # Increase speed over time (difficulty scaling), capped at 30 seconds
         current_time = time.time()
-        if current_time - self.time >= self.spawn_rate:
-            self.time = current_time
-            # Calculate time since game start, capped at 30 seconds for max difficulty
-            time_since_start = min(30, current_time - start_time)
-            # Increase speed by 10% every 30 seconds, capped at 2x after 30 seconds
-            self.speed = self.initial_speed * (1 + time_since_start / 30)
-            self.x_speed = self.initial_x_speed
-            # Spawn a new Tie Fighter
-            tie_fighters.append(TieFighter())
-            # Decrease spawn rate (spawn more frequently) over time, capped at 30 seconds
-            self.spawn_rate = self.initial_spawn_rate / (0.5 + time_since_start / 60)
+        time_since_start = min(30, current_time - start_time)
+        self.speed = self.initial_speed * (1 + time_since_start / 30)
+        self.x_speed = self.initial_x_speed
 
         # Update position based on speed
         self.rect.y += self.speed
@@ -611,10 +645,44 @@ class ImperialDestroyer:
 
         # Movement configuration (slow downward movement)
         self.speed = 2
+        
+        # Hit tracking for destruction
+        self.hits = 0
+        self.max_hits = 15
+        self.last_hit_position = None
 
     def update(self):
         """Move Imperial Destroyer downward"""
         self.rect.y += self.speed
+    
+    def get_hit(self, bullet_x, bullet_y):
+        """Handle being hit by a bullet. Returns True if destroyed."""
+        self.hits += 1
+        self.last_hit_position = (bullet_x, bullet_y)
+        
+        # At every 5 hits, create an explosion at the hit position
+        if self.hits % 5 == 0:
+            tie_fighter_explosions.append(Explosion(bullet_x, bullet_y, animation_speed=2))
+            tie_fighter_explosion_sound.play()
+        
+        # Check if destroyed
+        if self.hits >= self.max_hits:
+            return True
+        return False
+    
+    def destroy(self):
+        """Destroy the Imperial Destroyer with explosions. Returns blast radius."""
+        # Create 5 explosions spread randomly over the imperial destroyer
+        # Animation speed of 5 makes each explosion last 12*5/30 = 2 seconds
+        for _ in range(5):
+            expl_x = self.rect.x + random.randint(0, self.rect.width)
+            expl_y = self.rect.y + random.randint(0, self.rect.height)
+            tie_fighter_explosions.append(Explosion(expl_x, expl_y, animation_speed=5))
+        collision_sound.play()
+        
+        # Calculate blast radius (one time the largest length of the imperial destroyer)
+        # Use the largest dimension (width or height)
+        return max(self.rect.width, self.rect.height)
 
 
 # =============================================================================
@@ -659,8 +727,12 @@ async def main():
         x_wing_explosion = None
         x_wing_explosion_active = False
 
-        # Create initial Tie Fighters (10 enemies)
-        for i in range(10):
+        # Spawn management for Tie Fighters
+        tie_fighter_initial_spawn_rate = 5  # Initial spawn interval in seconds
+        last_tie_spawn_time = time.time()
+
+        # Create initial Tie Fighters (5 enemies)
+        for i in range(5):
             tie_fighters.append(TieFighter())
 
         # Create initial Imperial Destroyers (3 large enemies)
@@ -810,15 +882,26 @@ async def main():
 
             # Only update game objects if no X-Wing explosion is active
             if not x_wing_explosion_active:
+                # Global Tie Fighter spawn management
+                # Spawn rate: 1 per second at start, +1 per second every 15s, capped at 10/s
+                current_time = time.time()
+                time_since_start = current_time - start_time
+                spawn_rate = min(10, 1 + time_since_start // 15)  # Rate in spawns/second
+                current_tie_spawn_interval = 1.0 / spawn_rate  # Interval in seconds
+                
+                # Spawn new Tie Fighter if interval allows
+                if current_time - last_tie_spawn_time >= current_tie_spawn_interval:
+                    tie_fighters.append(TieFighter())
+                    last_tie_spawn_time = current_time
+                
                 # Update all Tie Fighters
                 for tie_fighter in tie_fighters[:]:
-                    # Update Tie Fighter position and spawn new ones
+                    # Update Tie Fighter position
                     x_wing.score += tie_fighter.update()
 
                     # Handle Tie Fighters that have passed the bottom of the screen
                     if tie_fighter.passed:
                         tie_fighters.remove(tie_fighter)
-                        tie_fighters.append(TieFighter())
                         play_tie_sound()
 
                     # Check for collision between X-Wing and Tie Fighter
